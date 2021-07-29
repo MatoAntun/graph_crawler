@@ -1,0 +1,18 @@
+[[source]]
+url = "https://pypi.org/simple"
+verify_ssl = true
+name = "pypi"
+
+[dev-packages]
+pylint = "==2.9.3"
+pytest = "==6.2.4"
+
+[packages]
+beautifulsoup4 = "==4.9.3"
+requests = "==2.26.0"
+pymgclient = "==1.0.0"
+requests-mock = "==1.9.3"
+pytest-socket = "==0.4.0"
+
+[requires]
+python_version = "3.9"

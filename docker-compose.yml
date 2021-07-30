@@ -1,0 +1,25 @@
+version: '3.9'
+
+services:
+  memgraph-crawler:
+    tty: true
+    container_name: memgraph-crawler
+    build:
+      context: ./
+      dockerfile: ./Dockerfile
+    ports:
+      - 5001:5000
+    depends_on:
+      - memgraph-db
+
+memgraph-db:
+  container_name: memgraph-db
+  image: memgraph-0.50.0
+  environment:
+    - HOST=localhost
+    - PORT=7687
+
+networks:
+  default:
+    external: true
+    name: praksa

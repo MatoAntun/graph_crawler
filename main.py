@@ -1,12 +1,15 @@
-from typing import List
+""" Memgraph depth crawler and shortest path finder"""
+import sys
+import os
+from typing import List, Tuple
+from urllib.parse import urlparse
+from urllib.request import urljoin
+import logging
 from bs4 import BeautifulSoup
 import requests
 from app.exceptions import WebsiteNotFoundError, ShortestPathNotFoundError
-import logging
-from urllib.parse import urlparse
-from urllib.request import urljoin
-import sys
-import os
+
+
 import mgclient
 
 logger = logging.getLogger('scrap_logger')
@@ -19,17 +22,17 @@ sys.tracebacklimit = 0
 PAST_DEPTH_LINKS = []
 DEPTH_COUNTER = 0
 CURRENT_DEPTH_LINKS = []
-CHECKED_URLS = set() # could be same as created nodes
+CHECKED_URLS = set()
 CREATED_NODES = set()
 
-class Parser:
+class DepthCrawler:
     """ Parse for webpage """
 
     def __init__(self, url=None, depth=2) -> None:
         self.url = url
         self.depth = depth
 
-    def request_webpage(self,current_url:str):
+    def request_webpage(self,current_url : str):
         """ Request web page data """
         requested_url = None
         try:
@@ -44,10 +47,12 @@ class Parser:
 
         return requested_url
 
-    # should check internal, external, and shortened ...
     def depth_search(self) -> None:
+        """ Depth search logic"""
         try:
             global DEPTH_COUNTER,PAST_DEPTH_LINKS, CURRENT_DEPTH_LINKS
+            if self.depth == 0:
+                DatabaseManipulation().create_node(self.url)
             while DEPTH_COUNTER < self.depth:
                 if DEPTH_COUNTER == 0:
                     DatabaseManipulation().create_node(self.url)
@@ -70,6 +75,7 @@ class Parser:
             raise ex
 
     def _find_links(self, temp_url : str) -> None:
+        """ Crawl and find links for specified url parse with BeautifulSoup"""
         requested_page = self.request_webpage(temp_url)
         if requested_page is not None:
             soup = BeautifulSoup(requested_page.content, 'html.parser', from_encoding="utf-8")
@@ -81,10 +87,12 @@ class Parser:
                     DatabaseManipulation().create_relationships(temp_url, current_url)
                     CURRENT_DEPTH_LINKS.append(current_url)
 
-    def get_url(self):
+    def get_url(self) -> str:
+        """ Getter eturns url"""
         return self.url
 
     def url_check(self, url : str) -> bool:
+        """ check if url is valid (simple check)"""
         min_attr = ('scheme' , 'netloc')
         try:
             result = urlparse(url)
@@ -97,10 +105,10 @@ class Parser:
 
     # Right now simple check make complex solution later
     def _join_url(self, link : str) -> str:
+        """ Join first part for internal urls """
         if link.startswith('mailto'):
             return None
-
-        elif not link.startswith('http'):
+        if not link.startswith('http'):
             # Root should be only for v1 later change to current_url
             link = urljoin(self.url, link)
 
@@ -110,8 +118,9 @@ class DatabaseManipulation:
     """ Parse for webpage """
     # we could solve it with creating path https://docs.memgraph.com/cypher-manual/clauses/create/
     def create_node(self, url : str) -> None:
-        global CREATED_NODES
+        """ Crate node for specifie Url """
         try:
+            global CREATED_NODES
             if url not in CREATED_NODES:
                 node_creation = """CREATE (u:Url {{name: '{link}'}});""".format(link=url)
                 cursor.execute(node_creation)
@@ -123,6 +132,7 @@ class DatabaseManipulation:
             raise ex
 
     def create_relationships(self, url_parent : str, url_child : str) -> None:
+        """ Create relationship between parent and child """
         try:
             if url_child in CREATED_NODES and self.check_if_relationsip_exist(url_parent, url_child) is None:
                 node_relationship = """
@@ -138,7 +148,10 @@ class DatabaseManipulation:
         except Exception as ex:
             logger.error(str(ex))
 
-    def check_if_relationsip_exist(self,url_parent,url_child):
+    def check_if_relationsip_exist(self, url_parent : str, url_child : str): # pylint: disable=no-self-use
+        """ Check if relationship alredy exist in database
+        Return None if we do not have any relationships
+        """
         relationship_query ="""
         MATCH (u:Url)-[r:PARENT]-(m:Url)
         WHERE u.name = '{parent}' AND m.name = '{child}'
@@ -149,7 +162,8 @@ class DatabaseManipulation:
         return cursor.fetchone()
 
 
-    def check_if_node_exist(self, node_name:str) -> None:
+    def check_if_node_exist(self, node_name : str):
+        """ Checking if node alredy exist in database """
         query = """
         MATCH (u:Url)
         WHERE u.name = '{node}'
@@ -161,7 +175,8 @@ class DatabaseManipulation:
 
         return node_exist
 
-    def find_shortest_path(self, parent_url : str, url_child : str ) -> None:
+    def find_shortest_path(self, parent_url : str, url_child : str ) -> Tuple:
+        """ Using wShortest (e, v | e.Distance) from Memgraph to find shortest path"""
 
         if self.check_if_node_exist(parent_url) is None:
             raise WebsiteNotFoundError(f"{parent_url}")
@@ -186,7 +201,8 @@ class DatabaseManipulation:
 
         return shortest_path
 
-    def delete_existing_database(self) -> None:
+    def delete_database_data(self) -> None:
+        """ Deleting database"""
         try:
             query = "MATCH (n) DETACH DELETE n"
             cursor.execute(query)
@@ -197,19 +213,20 @@ class DatabaseManipulation:
             raise ex
 
 def parse_input_arguments(sys_args : List):
+    """ Function used for parsing input arguments """
     if len(sys_args) == 3:
         if str(sys_args[1]) == "network":
             url = sys_args[2]
             if "--depth" not in sys_args:
-                DatabaseManipulation().delete_existing_database()
-                Parser(url = url).depth_search()
+                DatabaseManipulation().delete_database_data()
+                DepthCrawler(url = url).depth_search()
                 logger.info("Finished")
     elif len(sys_args) == 5:
         if str(sys_args[1]) == "network":
             url = sys_args[2]
             if "--depth" in sys_args:
-                DatabaseManipulation().delete_existing_database()
-                Parser(url=url, depth=int(sys_args[4])).depth_search()
+                DatabaseManipulation().delete_database_data()
+                DepthCrawler(url=url, depth=int(sys_args[4])).depth_search()
                 logger.info("Finished")
     elif sys_args[1] == "path" and len(sys_args) == 4:
         start_url = sys_args[2]

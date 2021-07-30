@@ -5,8 +5,7 @@ import mgclient
 import logging
 import os
 import sys
-from bs4 import BeautifulSoup
-from main import Parser, DatabaseManipulation
+from main import DepthCrawler
 from unittest import mock
 from unittest import TestCase, main, mock
 
@@ -17,15 +16,6 @@ sys.path.append(os.path.normpath(os.path.join(SCRIPT_DIR, PACKAGE_PARENT)))
 
 
 logger = logging.getLogger('scrap_test_logger')
-
-def setUp():
-    """Creating test setup """
-    connection = mgclient.connect(host='127.0.0.1', port=7687)
-    cursor = connection.cursor()
-
-def mock_1_data():
-    """ Mock data for integration testing """
-    return  open("tests/output_0.html", encoding="utf-8")
 
 class TestMockResponse(unittest.TestCase):
 
@@ -39,7 +29,7 @@ class TestMockResponse(unittest.TestCase):
         }
         mock_get.return_value = my_mock_response
         # factory
-        response = Parser().request_webpage("www.memGrof.com/existing")
+        response = DepthCrawler().request_webpage("www.memGrof.com/existing")
         self.assertEqual(response.status_code, 200)
 
 
@@ -53,35 +43,35 @@ class TestMockResponse(unittest.TestCase):
         }
         mock_get.return_value = my_mock_response
         # factory
-        response = Parser().request_webpage("www.memGrof.com/non/existing")
+        response = DepthCrawler().request_webpage("www.memGrof.com/non/existing")
         self.assertEqual(response.status_code, 404)
 
     def test_get_url(self):
         """ Test get url """
 
         url = "https://www.Memgraph.com"
-        get_url = Parser(url).get_url()
+        get_url = DepthCrawler(url).get_url()
         assert get_url == url
 
     def test_check_url_correct(self):
         """ Testing url form correct response """
 
         url = "https://www.Memgraph.com"
-        bool_check = Parser().url_check(url)
+        bool_check = DepthCrawler().url_check(url)
         assert bool_check == True
 
     def test_check_url_false(self):
         """ Checking url false form """
 
         url = "www.Memgraph.com"
-        bool_check = Parser().url_check(url)
+        bool_check = DepthCrawler().url_check(url)
         assert bool_check == False
 
     def test__join_url_mailto(self):
         """ Testing returning noone on mailto """
 
         url = "mailto:someone@yoursite.com"
-        url_joined = Parser()._join_url(url)
+        url_joined = DepthCrawler()._join_url(url)
         assert url_joined is None
 
     def test__join_url_http(self):
@@ -89,7 +79,7 @@ class TestMockResponse(unittest.TestCase):
 
         root_url = "https://memgraph.com/"
         url = "/download"
-        url_joined = Parser(root_url)._join_url(url)
+        url_joined = DepthCrawler(root_url)._join_url(url)
         assert url_joined == "https://memgraph.com/download"
 
     def test_creating_node_query(self):
@@ -138,7 +128,7 @@ class TestMockResponse(unittest.TestCase):
 
         assert query == correct_query
 
-    def test_delete_existing_database(self):
+    def test_delete_database_data(self):
         """ Query to delete database """
         query = "MATCH (n) DETACH DELETE n"
         assert query == "MATCH (n) DETACH DELETE n"
